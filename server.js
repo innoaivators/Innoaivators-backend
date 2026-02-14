@@ -60,27 +60,29 @@ app.post('/api/send-email', async (req, res) => {
         info: { messageId: 'queued-for-delivery' }
     });
 
-    // Construct email body based on subject
-    let details = '';
-    if (subject === 'Start a Project') {
-        details += `Area of Interest: ${areaOfInterest}\n`;
-    } else if (subject === 'Partnership') {
-        details += `Company: ${companyName}\n`;
-        details += `Role: ${role}\n`;
-        details += `Year Started: ${yearStarted}\n`;
-    } else if (subject === 'Careers') {
-        details += `Interested Area: ${interestedArea}\n`;
-        details += `Experience: ${yearsOfExperience}\n`;
-        if (previousCompany) details += `Previous Company: ${previousCompany}\n`;
-    }
+    // Process email in the background
+    setImmediate(async () => {
+        // Construct email body based on subject
+        let details = '';
+        if (subject === 'Start a Project') {
+            details += `Area of Interest: ${areaOfInterest}\n`;
+        } else if (subject === 'Partnership') {
+            details += `Company: ${companyName}\n`;
+            details += `Role: ${role}\n`;
+            details += `Year Started: ${yearStarted}\n`;
+        } else if (subject === 'Careers') {
+            details += `Interested Area: ${interestedArea}\n`;
+            details += `Experience: ${yearsOfExperience}\n`;
+            if (previousCompany) details += `Previous Company: ${previousCompany}\n`;
+        }
 
-    // Email content
-    const emailOptions = {
-        from: 'Innoaivators <onboarding@resend.dev>', // Use verified domain or onboarding email
-        to: 'innoaivation@gmail.com',
-        reply_to: email,
-        subject: `Innoaivators Contact: ${subject || 'General Inquiry'}`,
-        text: `
+        // Email content
+        const emailOptions = {
+            from: 'Innoaivators <onboarding@resend.dev>',
+            to: 'innoaivation@gmail.com',
+            reply_to: email,
+            subject: `Innoaivators Contact: ${subject || 'General Inquiry'}`,
+            text: `
 Name: ${name}
 Email: ${email}
 Phone: ${countryCode} ${phone}
@@ -90,31 +92,32 @@ ${details}
 
 Message:
 ${message}
-    `,
-    };
+        `,
+        };
 
-    // Send email asynchronously
-    console.log('Attempting to send email via Resend...');
+        const logFile = path.join(__dirname, 'email.log');
+        const log = (msg) => {
+            const timestamp = new Date().toISOString();
+            fs.appendFile(logFile, `[${timestamp}] ${msg}\n`, (err) => {
+                if (err) console.error('Error writing to log file:', err);
+            });
+        };
 
-    const logFile = path.join(__dirname, 'email.log');
-    const log = (msg) => {
-        const timestamp = new Date().toISOString();
-        fs.appendFileSync(logFile, `[${timestamp}] ${msg}\n`);
-    };
-
-    try {
-        const { data, error } = await resend.emails.send(emailOptions);
-        if (error) {
-            console.error('Resend Error:', error);
-            log(`ERROR: Failed to send to ${email}. Error: ${error.message}`);
-        } else {
-            console.log('Email sent successfully via Resend:', data.id);
-            log(`SUCCESS: Email sent to ${email} (Resend ID: ${data.id})`);
+        try {
+            console.log('Attempting to send email via Resend in background...');
+            const { data, error } = await resend.emails.send(emailOptions);
+            if (error) {
+                console.error('Resend Error:', error);
+                log(`ERROR: Failed to send to ${email}. Error: ${error.message}`);
+            } else {
+                console.log('Email sent successfully via Resend:', data.id);
+                log(`SUCCESS: Email sent to ${email} (Resend ID: ${data.id})`);
+            }
+        } catch (error) {
+            console.error('Error sending email (Resend Exception):', error);
+            log(`ERROR: Failed to send to ${email}. Exception: ${error.message}`);
         }
-    } catch (error) {
-        console.error('Error sending email (Resend Exception):', error);
-        log(`ERROR: Failed to send to ${email}. Exception: ${error.message}`);
-    }
+    });
 });
 
 // Debug endpoint to verify Resend configuration
